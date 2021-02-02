@@ -13,11 +13,9 @@ all luminaires are turned off. Now, if one luminaire detects motion, it will
 lit itself up but also adjacent luminaires. Since adjacent luminaires are lit
 up, the perceived feeling would be that the lights are on all the time.
 
-![Alt text](./street.svg)
-<img src="./street.svg">
+![street](./street.svg)
 
 The hardware for making this work looks like this:
 
-![Alt text](./hardware.jpg)
-<img src="./hardware.jpg">
+![hardware](./hardware.jpg)
 
