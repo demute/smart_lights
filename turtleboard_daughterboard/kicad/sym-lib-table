@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name cdm324-rescue)(type Legacy)(uri ${KIPRJMOD}/cdm324-rescue.lib)(options "")(descr ""))
+  (lib (name daughterboard-rescue)(type Legacy)(uri ${KIPRJMOD}/daughterboard-rescue.lib)(options "")(descr ""))
+)
