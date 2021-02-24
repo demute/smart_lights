@@ -11,14 +11,22 @@ uint64_t get_timestamp_in_us (void)
     if (us < lastUs && us + 1000000 < lastUs)
     {
         // sometimes, us_ticker_read can report a value which
-        // is lower than lastUs, even if us_ticker_read has not overflowed...
-        // that's why we're also comparing us + 1000000 < lastUs.
+        // is slightly lower than lastUs, even if us_ticker_read has not overflowed...
+        // as a workaround, make sure us is less than lastUs for the reason of overflow
+        // and not just small fluctuations. That's why we're comparing
+        // (us + 1000000 < lastUs) as well.
+        //
+        // however, for data type reasons we want get_timestamp_in_us to report
+        // a time which is monotonically increasing. If us < lastUs not due to an overflow,
+        // we want to use lastUs instead.
 
         offset += ((uint64_t) 1) << ((uint64_t) 32);
+        lastUs = us;
     }
-    lastUs = us;
+    else if (us > lastUs)
+        lastUs = us;
 
-    return offset + us;
+    return offset + lastUs;
 }
 
 uint64_t get_timestamp_in_ms (void)

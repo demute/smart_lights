@@ -4,7 +4,7 @@
 #include "timestamp.h"
 
 
-static Accumulator meanPowerAccumulator;
+static Accumulator idlePowerAccumulator;
 static Accumulator acPowerDownsamplerTo10Hz;
 static Accumulator dcBiasAccumulator;
 static Accumulator downsamplerTo2kHz;
@@ -47,23 +47,31 @@ void on_mean_power (int32_t meanPower_s1677721600) // 0.65 Hz
     }
 }
 
+#define HISTORY_LEN 10
 void on_ac_power_10Hz (int32_t acPower_s1677721600)
 {
+    static int aboveThresholdHistory[HISTORY_LEN] = {0};
+    static int historyIndex = 0;
     //debug ("acPower_s1677721600: %ld (%f)", acPower_s1677721600, (double) acPower_s1677721600 / (double) (1u<<31u));
     //return;
 
-    accumulate (& meanPowerAccumulator, acPower_s1677721600 >> 4);
+    accumulate (& idlePowerAccumulator, acPower_s1677721600 >> 4);
 
-    int32_t factorx128 = acPower_s1677721600 / (idlePower_s1677721600 >> 7);
-    //debug ("acPower_s1677721600: %ld idlePower_s1677721600: %ld powerFactor x 128: %ld", acPower_s1677721600, idlePower_s1677721600, factorx128);
+    int32_t powerAboveBackround_s1677721600 = acPower_s1677721600 - idlePower_s1677721600;
 
-    // if current power is higher than 3.5 x idlePower, define it as motion detected
-    // factorx128 has mean value 128 => 3.5 * 128 = 448
+    aboveThresholdHistory[historyIndex] = (powerAboveBackround_s1677721600 > 100000);
+    historyIndex = (historyIndex + 1) % HISTORY_LEN;
 
-    if (factorx128 > 450)
-    {
-        motion_detected_cb (factorx128);
-    }
+    int score = 0;
+    for (int i=0; i<HISTORY_LEN; i++)
+        score += aboveThresholdHistory[i];
+
+    //debug ("acPower_s1677721600: %ld idlePower_s1677721600: %ld powerAboveBackround_s1677721600: %ld", acPower_s1677721600, idlePower_s1677721600, powerAboveBackround_s1677721600);
+    //debug ("acPower: %ld idlePower: %ld relPower: %lf", acPower_s1677721600, idlePower_s1677721600, powerAboveBackround_s1677721600 * 1e-6f);
+    //debug ("score: %2d relPower: %+10.4lf", score, powerAboveBackround_s1677721600 * 1e-3f);
+
+    if (score > 8)
+        motion_detected_cb (powerAboveBackround_s1677721600);
 }
 
 void on_dc_bias (int32_t dcBias_u67108864)
@@ -96,7 +104,7 @@ void on_mean_2khz (int32_t halfMean_u16384)
 void detection_algorithm_init (void (*_motion_detected_cb) (int32_t factorx128))
 {
     motion_detected_cb = _motion_detected_cb;
-    init_accumulator (& meanPowerAccumulator, on_mean_power, 16);
+    init_accumulator (& idlePowerAccumulator, on_mean_power, 16);
     init_accumulator (& acPowerDownsamplerTo10Hz, on_ac_power_10Hz, 200);
     init_accumulator (& dcBiasAccumulator, on_dc_bias, 2048);
     init_accumulator (& downsamplerTo2kHz, on_mean_2khz, 4);

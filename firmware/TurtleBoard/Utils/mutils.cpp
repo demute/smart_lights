@@ -147,10 +147,10 @@ void printTimeStamp()
         timer->reset();
         timer->start();
     }
-    int msecs = usecs % 1000000;
+    int msecs = (usecs % 1000000) / 1000;
 
-    extern int lightIsOn;
-    rprintf("%s %02d:%02d:%02d.%06d ", (lightIsOn ? "ON " : "OFF"), tm->tm_hour, tm->tm_min, tm->tm_sec, msecs);
+    //rprintf("%02d:%02d:%02d.%06d ", tm->tm_hour, tm->tm_min, tm->tm_sec, msecs);
+    rprintf("%02d%02d%02d.%03d ", tm->tm_hour, tm->tm_min, tm->tm_sec, msecs);
 }
 
 void dprintf(const char *format, ...)

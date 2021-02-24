@@ -57,6 +57,14 @@ void OnCadDone (void *radio, void *userThisPtr, void *userData, bool channelActi
  */
 void OnFhssChangeChannel(void *radio, void *userThisPtr, void *userData, uint8_t channelIndex );
 
+enum
+{
+    STATE_UNDEFINED,
+    STATE_OFF,
+    STATE_ON_DUE_TO_MOTION,
+    STATE_ON_DUE_TO_NEIGHBOUR
+};
+
 typedef struct
 {
     uint8_t value;
@@ -68,6 +76,7 @@ typedef struct
     uint32_t  magic0;
     uint16_t  srcAddress;
     uint16_t  timeSinceLastMotion;
+    uint8_t   state;
     Parameter params[3];
     uint32_t  crc32;
 } Packet;

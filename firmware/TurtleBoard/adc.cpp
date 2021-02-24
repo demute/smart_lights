@@ -121,8 +121,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
     {
         nextTsp += PERIOD_TIME_US;
         raw = (cnt == 8) ? sum >> 3 : sum / cnt;
-        if (cnt != 8)
-            debug ("CNT %d", cnt);
+        //if (cnt != 8)
+        //    debug ("CNT %d", cnt);
         lc = cnt;
         sum = 0;
         cnt = 0;

@@ -67,10 +67,12 @@ extern USBSerialBuffered *usb;
 extern DigitalOut greenLED;
 extern DigitalOut redLED;
 extern uint16_t deviceId;
+extern uint64_t lastStateChangeTsp;
 extern uint64_t lastTurnOnTsp;
 extern uint64_t lastMotionTsp;
 extern uint64_t lastResetTsp;
 extern uint64_t lastTransmissionTsp;
+extern int      nodeState;
 
 typedef enum
 {
@@ -192,6 +194,7 @@ Packet *craft_packet (Packet *p)
     uint64_t tsp = get_timestamp_in_us ();
     uint32_t elapsed = (uint32_t) ((tsp - lastMotionTsp) / 1000000);
     p->timeSinceLastMotion = (elapsed < 65535) ? elapsed: 65535;
+    p->state = (uint8_t) nodeState;
 
     p->params[PARAM_THRESHOLD     ].value = 0;
     p->params[PARAM_THRESHOLD     ].age   = 0;
@@ -200,7 +203,8 @@ Packet *craft_packet (Packet *p)
     p->params[PARAM_LIGHT_STATE   ].value = 0;
     p->params[PARAM_LIGHT_STATE   ].age   = 0;
 
-    dprintf ("TX BEACON %x (timeSinceLastMotion:%u)", p->srcAddress, p->timeSinceLastMotion);
+    int id = get_node_id (p->srcAddress);
+    dprintf ("TX BEACON %x (%d) (timeSinceLastMotion:%u)", p->srcAddress, id, p->timeSinceLastMotion);
     p->crc32 = 0;
     p->crc32 = crc32 (0, p, sizeof (*p));
     return p;
@@ -224,9 +228,10 @@ void on_packet (Packet *p)
         return;
     }
 
-    dprintf ("RX BEACON %x (timeSinceLastMotion:%u)", p->srcAddress, p->timeSinceLastMotion);
-
     int id = get_node_id (p->srcAddress);
+
+    dprintf ("RX BEACON %x (%d) (timeSinceLastMotion:%u)", p->srcAddress, id, p->timeSinceLastMotion);
+
     if (id < 0)
         return;
 
@@ -467,11 +472,13 @@ void slightlight_init (void)
 
 int slightlight_poll (void)
 {
-    int transmitted = 0;
+    int transmitting = 0;
     WatchDogUpdate();
 
     static   Packet packet;
-    uint32_t rxMs = 100;
+    uint32_t rxMs = 1000;
+    if (nodeState == STATE_ON_DUE_TO_MOTION && (get_timestamp_in_us () - lastStateChangeTsp) < 5000000)
+        rxMs = 10;
 
     switch (State)
     {
@@ -483,8 +490,8 @@ int slightlight_poll (void)
          // we have received a packet. Parse it and wait for next packet.
          if( BufferSize == sizeof (packet))
          {
-             greenLED = 1;
-             //redLED = 1;
+             //greenLED = 1;
+             redLED = 1;
              Packet *p = (Packet *) Buffer;
              BufferSize = 0;
              on_packet (p);
@@ -496,17 +503,11 @@ int slightlight_poll (void)
          }
          State = LOWPOWER;
          Radio->Rx (rxMs);
-         greenLED = 0;
-         //redLED = 0;
+         //greenLED = 0;
+         redLED = 0;
          break;
      case RX_TIMEOUT:
          {
-             // we have waited a random time without receiving anything. Send our packet
-             uint32_t elapsedUsSinceTx     = (uint32_t) (get_timestamp_in_us () - lastTransmissionTsp);
-             uint32_t elapsedUsSinceTurnOn = (uint32_t) (get_timestamp_in_us () - lastTurnOnTsp);
-             uint32_t txPeriodTime     = (elapsedUsSinceTurnOn < 6000000) ? 5000 : 5000000;
-             if (elapsedUsSinceTx > txPeriodTime)
-             {
                  wait_ms (random_wait_time_ms ());
                  while (Radio->RxSignalPending ())
                  {
@@ -515,29 +516,23 @@ int slightlight_poll (void)
                  }
 
                  craft_packet (& packet);
-                 greenLED = 1;
+                 greenLED = (nodeState == STATE_OFF);
                  State = LOWPOWER;
                  lastTransmissionTsp = get_timestamp_in_us ();
                  Radio->Send (& packet, sizeof (packet));
-                 transmitted = 1;
-             }
-             else
-             {
-                 Radio->Rx (rxMs);
-                 State = LOWPOWER;
-             }
+                 transmitting = 1;
          }
          break;
      case TX:
          //dprintf ("tx");
-         greenLED = 0;
+         greenLED = (nodeState != STATE_OFF);
          State = LOWPOWER;
          Radio->Rx (rxMs);
          break;
      case TX_TIMEOUT:
          State = LOWPOWER;
          Radio->Rx (rxMs);
-         greenLED = 0;
+         greenLED = (nodeState != STATE_OFF);
          break;
      case LOWPOWER:
          break;
@@ -545,7 +540,7 @@ int slightlight_poll (void)
          State = LOWPOWER;
          break;
     }
-    return transmitted;
+    return transmitting;
 }
 
 void OnTxDone(void *radio, void *userThisPtr, void *userData)
